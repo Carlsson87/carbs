@@ -31,10 +31,10 @@ init flags =
     in
     case food of
         Ok list ->
-            ( Model list [] "" True, Cmd.none )
+            ( Model list [] "" True "0", Cmd.none )
 
         Err _ ->
-            ( Model [] [] "" True, Cmd.none )
+            ( Model [] [] "" True "0", Cmd.none )
 
 
 type alias Model =
@@ -42,6 +42,7 @@ type alias Model =
     , ingredients : List Ingredient
     , input : String
     , sidebarOpen : Bool
+    , customCarbs : String
     }
 
 
@@ -62,6 +63,7 @@ type Msg
     | ToggleSidebar
     | UpdateIngredient Int String
     | RemoveIngredient Int
+    | UpdateCustomCarbs String
 
 
 update msg model =
@@ -98,6 +100,9 @@ update msg model =
             in
             ( { model | ingredients = removed }, Cmd.none )
 
+        UpdateCustomCarbs str ->
+            ( { model | customCarbs = str }, Cmd.none )
+
 
 foodDecoder =
     Decode.map2
@@ -106,16 +111,17 @@ foodDecoder =
         (Decode.field "carbs" Decode.float)
 
 
+view : Model -> Html Msg
 view model =
     Html.div
         []
-        [ Html.button
+        [ ingredientTable model.ingredients model.customCarbs
+        , Html.button
             [ Html.Attributes.class "btn btn-success btn-lg btn-block"
             , Html.Events.onClick ToggleSidebar
             ]
             [ Html.text "Lägg till ingrediens"
             ]
-        , ingredientTable model.ingredients
         , sidebar model
         ]
 
@@ -192,8 +198,8 @@ findFood str { name } =
     String.contains (String.toLower str) (String.toLower name)
 
 
-ingredientTable : List Ingredient -> Html Msg
-ingredientTable is =
+ingredientTable : List Ingredient -> String -> Html Msg
+ingredientTable is customCarbs =
     let
         calc ( { carbs }, _, value ) =
             Maybe.map (\weight -> carbs * weight / 100) value
@@ -201,6 +207,7 @@ ingredientTable is =
         carbs =
             Maybe.map List.sum (traverse calc is)
                 |> Maybe.map (\num -> toFloat (round (num * 10)) / 10)
+                |> Maybe.map (\sum -> sum + Result.withDefault 0 (String.toFloat customCarbs))
                 |> Maybe.map (toString >> flip String.append "g")
                 |> Maybe.withDefault "Nepp"
     in
@@ -226,7 +233,32 @@ ingredientTable is =
             ]
         , Html.tbody
             []
-            (List.indexedMap ingredientTableRow is)
+            (List.indexedMap ingredientTableRow is
+                ++ [ Html.tr
+                        []
+                        [ Html.td
+                            []
+                            [ Html.text "Egna kolhydrater"
+                            ]
+                        , Html.td
+                            [ Html.Attributes.class
+                                (String.toFloat customCarbs
+                                    |> Result.toMaybe
+                                    |> Maybe.map (always "")
+                                    |> Maybe.withDefault "has-error"
+                                )
+                            ]
+                            [ Html.input
+                                [ Html.Attributes.class "form-control"
+                                , Html.Attributes.type_ "number"
+                                , Html.Attributes.value customCarbs
+                                , Html.Events.onInput UpdateCustomCarbs
+                                ]
+                                []
+                            ]
+                        ]
+                   ]
+            )
         , Html.tfoot
             []
             [ Html.tr
