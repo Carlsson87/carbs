@@ -1,9 +1,11 @@
 port module Main exposing (..)
 
+import Dom
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Json.Decode as Decode exposing (..)
+import Task
 
 
 port remember : ( String, String ) -> Cmd msg
@@ -54,7 +56,8 @@ type alias Ingredient =
 
 
 type Msg
-    = AddIngredient Ingredient
+    = Noop
+    | AddIngredient Ingredient
     | UpdateInput String
     | ToggleSidebar
     | UpdateIngredient Int String
@@ -63,11 +66,14 @@ type Msg
 
 update msg model =
     case msg of
+        Noop ->
+            ( model, Cmd.none )
+
         UpdateInput str ->
             ( { model | input = str }, Cmd.none )
 
         AddIngredient ingr ->
-            ( { model | input = "", ingredients = ingr :: model.ingredients }, Cmd.none )
+            ( { model | input = "", ingredients = ingr :: model.ingredients }, Task.attempt (always Noop) (Dom.focus "search") )
 
         ToggleSidebar ->
             ( { model | sidebarOpen = not model.sidebarOpen }, Cmd.none )
@@ -163,6 +169,7 @@ sidebar { sidebarOpen, input, foods } =
             ]
             [ Html.input
                 [ Html.Attributes.class "form-control"
+                , Html.Attributes.id "search"
                 , Html.Events.onInput UpdateInput
                 , Html.Attributes.placeholder "Skriv för att söka"
                 , Html.Attributes.value input
@@ -193,6 +200,7 @@ ingredientTable is =
 
         carbs =
             Maybe.map List.sum (traverse calc is)
+                |> Maybe.map (\num -> toFloat (round (num * 10)) / 10)
                 |> Maybe.map (toString >> flip String.append "g")
                 |> Maybe.withDefault "Nepp"
     in
@@ -205,7 +213,7 @@ ingredientTable is =
                 []
                 [ Html.th
                     []
-                    [ Html.text "Ingrediens"
+                    [ Html.text "Ingredienser"
                     ]
                 , Html.th
                     [ Html.Attributes.style
@@ -247,13 +255,17 @@ ingredientTableRow index ( { name, carbs }, input, value ) =
             ]
         , Html.td
             []
-            [ Html.input
-                [ Html.Attributes.type_ "number"
-                , Html.Attributes.class "form-control"
-                , Html.Attributes.value input
-                , Html.Events.onInput (UpdateIngredient index)
+            [ Html.div
+                [ Html.Attributes.class (Maybe.map (always "") value |> Maybe.withDefault "has-error")
                 ]
-                []
+                [ Html.input
+                    [ Html.Attributes.type_ "number"
+                    , Html.Attributes.class "form-control"
+                    , Html.Attributes.value input
+                    , Html.Events.onInput (UpdateIngredient index)
+                    ]
+                    []
+                ]
             ]
         ]
 
